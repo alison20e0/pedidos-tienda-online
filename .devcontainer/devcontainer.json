@@ -1,0 +1,32 @@
+{
+  "name": "pedidos-tienda-online",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "api",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  "forwardPorts": [3000, 5432, 5672, 15672],
+  "portsAttributes": {
+    "3000": { "label": "pedidos-api" },
+    "5432": { "label": "postgres" },
+    "5672": { "label": "rabbitmq-amqp" },
+    "15672": { "label": "rabbitmq-management" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "mtxr.sqltools",
+        "mtxr.sqltools-driver-pg",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "eslint.validate": [
+          "javascript",
+          "typescript"
+        ]
+      }
+    }
+  },
+  "remoteUser": "node"
+}
