@@ -6,58 +6,78 @@ services:
     container_name: pedidos-api
     restart: unless-stopped
     ports:
+      # Host 3000 -> contenedor 3000
       - "3000:3000"
     environment:
       NODE_ENV: production
       PORT: "3000"
       DB_HOST: postgres
       DB_PORT: "5432"
-      DB_NAME: pedidos_db
+      DB_NAME: ${DB_NAME:-pedidos_db}
       DB_USER: ${DB_USER:-admin}
       DB_PASSWORD: ${DB_PASSWORD:-secretpassword123}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: ${RABBITMQ_USER:-admin}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-secretpassword123}
+      RESERVA_TTL_MINUTOS: ${RESERVA_TTL_MINUTOS:-15}
+    volumes:
+      # Se aplican al crear el volumen; la API tambien los ejecuta al arrancar.
+      - ./scripts/sql:/docker-entrypoint-initdb.d:ro
     depends_on:
       postgres:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   postgres:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     container_name: pedidos-postgres
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      # Host 5444 -> contenedor 5432 (el 5432 del host queda libre)
+      - "5444:5432"
     environment:
-      POSTGRES_DB: pedidos_db
+      POSTGRES_DB: ${DB_NAME:-pedidos_db}
       POSTGRES_USER: ${DB_USER:-admin}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-secretpassword123}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d pedidos_db"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ${DB_USER:-admin} -d ${DB_NAME:-pedidos_db}"]
+      interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
 
   rabbitmq:
-    image: rabbitmq:3-management-alpine
+    image: rabbitmq:3.13-management-alpine
     container_name: pedidos-rabbitmq
     restart: unless-stopped
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      # Host 5674 -> AMQP 5672 y Host 15674 -> consola 15672
+      - "5674:5672"
+      - "15674:15672"
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-secretpassword123}
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      # Sonda TCP pura a propósito: rabbitmq-diagnostics se ejecuta como root y
+      # crea /var/lib/rabbitmq/.erlang.cookie con propietario root, lo que impide
+      # al servidor (uid rabbitmq) leerlo y mata el arranque. Esta sonda comprueba
+      # lo que la API necesita de verdad: que 5672 ya acepta conexiones AMQP.
+      test: ["CMD", "bash", "-c", "until (exec 3<>/dev/tcp/127.0.0.1/5672) 2>/dev/null; do sleep 2; done"]
       interval: 10s
-      timeout: 5s
-      retries: 5
+      timeout: 10s
+      retries: 12
+      start_period: 60s
 
 volumes:
   postgres_data:

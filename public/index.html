@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Seguimiento de pedidos</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --borde: #d4d4d8;
+      --fondo: #f4f4f5;
+      --panel: #ffffff;
+      --texto: #18181b;
+      --tenue: #71717a;
+      --acento: #2563eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 2rem 1rem;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--fondo);
+      color: var(--texto);
+    }
+    main { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+    p.sub { margin: 0 0 1.5rem; color: var(--tenue); font-size: .9rem; }
+    form { display: flex; gap: .5rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    input {
+      flex: 1 1 8rem; padding: .6rem .75rem; font-size: 1rem;
+      border: 1px solid var(--borde); border-radius: .4rem; background: var(--panel);
+      color: inherit;
+    }
+    button {
+      padding: .6rem 1.1rem; font-size: 1rem; border: 0; border-radius: .4rem;
+      background: var(--acento); color: #fff; cursor: pointer;
+    }
+    button.secundario { background: transparent; color: var(--acento); border: 1px solid var(--acento); }
+    button:disabled { opacity: .5; cursor: default; }
+    .panel {
+      background: var(--panel); border: 1px solid var(--borde); border-radius: .6rem;
+      padding: 1rem 1.25rem; margin-bottom: 1rem;
+    }
+    .fila { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .estado {
+      display: inline-block; padding: .25rem .6rem; border-radius: 999px;
+      font-size: .8rem; font-weight: 600; letter-spacing: .02em; border: 1px solid;
+    }
+    .CONFIRMADO   { background: #eef2ff; color: #3730a3; border-color: #c7d2fe; }
+    .RESERVADO    { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+    .PAGADO       { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; }
+    .EN_PREPARACION, .DESPACHADO { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+    .CANCELADO    { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+    .EN_REVISION  { background: #fdf4ff; color: #86198f; border-color: #f5d0fe; }
+    table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    th, td { text-align: left; padding: .45rem .3rem; border-bottom: 1px solid var(--borde); }
+    th { color: var(--tenue); font-weight: 500; }
+    td.num, th.num { text-align: right; }
+    ol.historial { list-style: none; margin: 0; padding: 0; }
+    ol.historial li { position: relative; padding: 0 0 1rem 1.5rem; border-left: 2px solid var(--borde); }
+    ol.historial li:last-child { border-left-color: transparent; padding-bottom: 0; }
+    ol.historial li::before {
+      content: ""; position: absolute; left: -6px; top: .35rem;
+      width: 10px; height: 10px; border-radius: 50%; background: var(--acento);
+    }
+    .tipo { font-weight: 600; font-size: .9rem; }
+    .detalle, .momento { color: var(--tenue); font-size: .82rem; }
+    .momento { font-variant-numeric: tabular-nums; }
+    .etiqueta { color: var(--venue, var(--tenue)); }
+    .error { color: #b91c1c; }
+    .oculto { display: none; }
+    .acciones { display: flex; gap: .5rem; margin-top: 1rem; flex-wrap: wrap; }
+    .reserva { font-size: .85rem; color: var(--tenue); margin: .35rem 0 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Seguimiento de pedidos</h1>
+    <p class="sub">Escribe el id del pedido para ver su estado actual y el historial completo.</p>
+
+    <form id="form-buscar">
+      <input id="id-pedido" type="number" min="1" step="1" placeholder="Id del pedido (por ejemplo 1)" required />
+      <button type="submit">Consultar</button>
+      <button type="button" class="secundario" id="btn-auto">Auto: OFF</button>
+    </form>
+
+    <div id="error" class="panel error oculto"></div>
+
+    <section id="panel-pedido" class="panel oculto">
+      <div class="fila">
+        <div>
+          <div class="tipo">Pedido <span id="p-id"></span> · <span id="p-cliente"></span></div>
+          <p class="reserva" id="p-reserva"></p>
+        </div>
+        <span class="estado" id="p-estado"></span>
+      </div>
+
+      <table>
+        <thead>
+          <tr><th>Producto</th><th class="num">Cant.</th><th class="num">Precio</th><th class="num">Subtotal</th></tr>
+        </thead>
+        <tbody id="p-items"></tbody>
+        <tfoot>
+          <tr><th colspan="3">Total</th><th class="num" id="p-total"></th></tr>
+        </tfoot>
+      </table>
+
+      <div class="acciones">
+        <button type="button" id="btn-preparar">Preparar</button>
+        <button type="button" id="btn-despachar">Despachar</button>
+      </div>
+    </section>
+
+    <section id="panel-historial" class="panel oculto">
+      <div class="fila">
+        <strong>Historial</strong>
+        <span class="detalle" id="p-pagos"></span>
+      </div>
+      <ol class="historial" id="p-historial"></ol>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const formatoFecha = (v) => (v ? new Date(v).toLocaleString('es') : '');
+    const dinero = (v) => `$${Number(v).toFixed(2)}`;
+
+    let idActual = null;
+    let auto = false;
+    let temporizador = null;
+
+    function mostrarError(mensaje) {
+      $('error').textContent = mensaje;
+      $('error').classList.remove('oculto');
+    }
+
+    function limpiarError() {
+      $('error').classList.add('oculto');
+    }
+
+    async function consultar() {
+      const id = Number($('id-pedido').value);
+      if (!Number.isInteger(id) || id <= 0) return;
+
+      try {
+        const respuesta = await fetch(`/pedidos/${id}/estado`);
+        const datos = await respuesta.json();
+        if (!respuesta.ok) {
+          idActual = null;
+          $('panel-pedido').classList.add('oculto');
+          $('panel-historial').classList.add('oculto');
+          mostrarError(datos?.error?.mensaje || `Error ${respuesta.status}`);
+          return;
+        }
+        limpiarError();
+        idActual = id;
+        pintar(await (await fetch(`/pedidos/${id}`)).json());
+        pintarEstado(datos);
+      } catch (err) {
+        mostrarError(`No se pudo consultar la API: ${err.message}`);
+      }
+    }
+
+    function pintar({ pedido }) {
+      $('p-id').textContent = pedido.id;
+      $('p-cliente').textContent = pedido.cliente;
+      $('p-total').textContent = dinero(pedido.total);
+      const estado = $('p-estado');
+      estado.textContent = pedido.estado;
+      estado.className = `estado ${pedido.estado}`;
+      $('p-items').innerHTML = pedido.items
+        .map(
+          (i) => `<tr><td>${i.nombre} <span class="detalle">${i.sku}</span></td>
+            <td class="num">${i.cantidad}</td>
+            <td class="num">${dinero(i.precio_unitario)}</td>
+            <td class="num">${dinero(i.subtotal)}</td></tr>`
+        )
+        .join('');
+      $('panel-pedido').classList.remove('oculto');
+    }
+
+    function pintarEstado(datos) {
+      const reserva = $('p-reserva');
+      reserva.textContent = datos.reserva_vigente
+        ? `Reserva vigente hasta ${formatoFecha(datos.reserva_expira_en)}`
+        : datos.estado === 'RESERVADO'
+          ? 'La reserva venció: el stock puede volver a estar disponible'
+          : '';
+
+      $('p-pagos').textContent = datos.pagos.length
+        ? datos.pagos.map((p) => `pago ${p.referencia}: ${p.estado}`).join(' · ')
+        : '';
+      $('p-historial').innerHTML = datos.historial
+        .map(
+          (e) => `<li>
+            <div class="tipo">${e.tipo.replaceAll('_', ' ')}${
+              e.de ? ` <span class="detalle">${e.de} → ${e.a}</span>` : ''
+            }</div>
+            ${e.detalle ? `<div class="detalle">${e.detalle}</div>` : ''}
+            <div class="momento">${formatoFecha(e.creado_en)}${
+              e.publicado_en ? ` · evento publicado en el bus` : ''
+            }</div>
+          </li>`
+        )
+        .join('');
+      $('panel-historial').classList.remove('oculto');
+    }
+
+    async function accion(ruta) {
+      if (idActual === null) return;
+      const respuesta = await fetch(`/pedidos/${idActual}/${ruta}`, { method: 'POST' });
+      const datos = await respuesta.json();
+      if (!respuesta.ok) {
+        mostrarError(datos?.error?.mensaje || `Error ${respuesta.status}`);
+        return;
+      }
+      limpiarError();
+      await consultar();
+    }
+
+    $('form-buscar').addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      consultar();
+    });
+    $('btn-preparar').addEventListener('click', () => accion('preparar'));
+    $('btn-despachar').addEventListener('click', () => accion('despachar'));
+
+    $('btn-auto').addEventListener('click', () => {
+      auto = !auto;
+      $('btn-auto').textContent = `Auto: ${auto ? 'ON' : 'OFF'}`;
+      clearInterval(temporizador);
+      if (auto) temporizador = setInterval(() => idActual && consultar(), 10000);
+    });
+  </script>
+</body>
+</html>
